@@ -102,6 +102,11 @@ final class JarRelocatorTask {
         } else if (!this.resources.contains(mappedName)) {
             processResource(mappedName, entryIn, entry.getTime());
         }
+
+        // 克隆一份 kotlin_builtins 文件在原来的位置
+        if (name.endsWith(".kotlin_builtins")) {
+            processResource(name, entryIn, entry.getTime());
+        }
     }
 
     private void processDirectory(String name, boolean parentsOnly) throws IOException {
@@ -217,5 +222,15 @@ final class JarRelocatorTask {
             }
             to.write(buf, 0, n);
         }
+    }
+
+    private static byte[] readFully(InputStream inputStream) throws IOException {
+        ByteArrayOutputStream stream = new ByteArrayOutputStream();
+        byte[] buf = new byte[1024];
+        int len;
+        while ((len = inputStream.read(buf)) > 0) {
+            stream.write(buf, 0, len);
+        }
+        return stream.toByteArray();
     }
 }
