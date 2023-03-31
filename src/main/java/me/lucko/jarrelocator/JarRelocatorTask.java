@@ -19,13 +19,9 @@ package me.lucko.jarrelocator;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassWriter;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.Enumeration;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.util.*;
 import java.util.jar.*;
 import java.util.regex.Pattern;
 
@@ -94,12 +90,15 @@ final class JarRelocatorTask {
         String mappedName = this.remapper.map(name);
 
         // ensure the parent directory structure exists for the entry.
+        // 翻译：确保条目的父目录结构存在。
         processDirectory(mappedName, true);
 
         if (name.endsWith(".class")) {
             processClass(name, entryIn);
         } else if (name.equals("META-INF/MANIFEST.MF")) {
             processManifest(name, entryIn, entry.getTime());
+        } else if (name.startsWith("META-INF/services/")) {
+            processService(name, entryIn, entry.getTime());
         } else if (!this.resources.contains(mappedName)) {
             processResource(mappedName, entryIn, entry.getTime());
         }
@@ -148,6 +147,34 @@ final class JarRelocatorTask {
         out.write(this.jarOut);
 
         this.resources.add(name);
+    }
+
+    private void processService(String name, InputStream entryIn, long lastModified) throws IOException {
+        // 对服务文件名和内容进行重定位
+        String realName = name.substring("META-INF/services/".length()).replace('.', '/');
+        String mappedName = "META-INF/services/" + this.remapper.map(realName).replace('/', '.');
+
+        JarEntry jarEntry = new JarEntry(mappedName);
+        jarEntry.setTime(lastModified);
+
+        this.jarOut.putNextEntry(jarEntry);
+
+        // 读取内容并进行重定位
+        List<String> arr = new ArrayList<>();
+        BufferedReader reader = new BufferedReader(new InputStreamReader(entryIn, StandardCharsets.UTF_8));
+        String line;
+        while ((line = reader.readLine()) != null) {
+            arr.add(this.remapper.map(line.replace('.', '/')).replace('/', '.'));
+        }
+        // 写入到 jar 文件中
+        BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(this.jarOut, StandardCharsets.UTF_8));
+        for (String l : arr) {
+            writer.write(l);
+            writer.newLine();
+        }
+        writer.flush();
+
+        this.resources.add(mappedName);
     }
 
     private void processResource(String name, InputStream entryIn, long lastModified) throws IOException {
